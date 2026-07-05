@@ -1,0 +1,49 @@
+# ============================================================
+# AI Resume Screening & Interview Scheduling — Requirements
+# ============================================================
+
+# --- Web Framework ---
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+
+# --- Resume Parsing ---
+pdfplumber==0.11.4
+PyMuPDF==1.25.2
+python-docx==1.1.2
+
+# --- AI / LLM (Gemini 2.5 Flash) ---
+google-genai>=1.0.0
+
+# --- Database (Airtable) ---
+pyairtable>=2.3.0
+
+# --- Cache (Redis) ---
+redis==5.2.1
+
+# --- Google Calendar & Gmail ---
+google-api-python-client==2.156.0
+google-auth==2.37.0
+google-auth-oauthlib==1.2.1
+google-auth-httplib2==0.2.0
+
+# --- Frontend (Streamlit) ---
+streamlit==1.41.1
+
+# --- Utilities ---
+python-dotenv==1.0.1
+pydantic==2.10.4
+pydantic-settings==2.7.1
+tenacity==9.0.0
+httpx==0.28.1
+requests>=2.31.0
+
+# --- Testing ---
+pytest==8.3.4
+pytest-asyncio==0.25.0
+
+# --- Embeddings (Bonus — optional, comment out if install fails) ---
+# sentence-transformers==3.3.1
+
+# --- Vector Store (Bonus — optional, comment out if install fails) ---
+# chromadb==0.5.23

@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+.venv/
+
+# Environment
+.env
+.env.local
+.env.production
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads
+uploads/
+uploads/*
+!uploads/.gitkeep
+
+# Test / Cache
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+chroma_db/
+*.db
+
+# Docker
+docker-compose.override.yml
+
+# n8n
+n8n_data/
+*.png
+ai_resume_screening.egg-info/
+*.tar.gz

@@ -1,0 +1,253 @@
+{
+  "name": "AI Resume Screening — Interview Automation",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "interview",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "webhook-trigger",
+      "name": "Webhook Trigger",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "notes": "Receives candidate JSON from FastAPI after AI analysis. Body: {candidate_name, email, phone, match_score, application_status, candidate_id, skills, ai_summary, recommendation}"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": { "caseSensitive": false, "leftValue": "", "typeValidation": "strict" },
+          "conditions": [
+            {
+              "id": "score-gte-80",
+              "leftValue": "={{ $json.match_score }}",
+              "rightValue": 80,
+              "operator": { "type": "number", "operation": "gte" }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "if-shortlisted",
+      "name": "Match Score >= 80?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [240, 0],
+      "notes": "IF match_score >= 80 → schedule interview. ELSE → update Airtable and end."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            { "id": "1", "name": "interview_date", "value": "={{ $now.plus(2, 'day').set('hour', 10).set('minute', 0).set('second', 0).toISO() }}", "type": "string" },
+            { "id": "2", "name": "interview_end", "value": "={{ $now.plus(2, 'day').set('hour', 11).set('minute', 0).set('second', 0).toISO() }}", "type": "string" },
+            { "id": "3", "name": "date_display", "value": "={{ $now.plus(2, 'day').set('hour', 10).set('minute', 0).toFormat('cccc, d MMMM yyyy') }}", "type": "string" },
+            { "id": "4", "name": "time_display", "value": "={{ $now.plus(2, 'day').set('hour', 10).set('minute', 0).toFormat('HH:mm') }} UTC", "type": "string" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "set-dates",
+      "name": "Set Interview Slot",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [480, -200],
+      "notes": "Calculate interview date/time: 2 days from now, 10:00–11:00 UTC"
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "calendarId": { "__rl": true, "value": "primary", "mode": "id" },
+        "summary": "=Interview: {{ $json.candidate_name }}",
+        "description": "=Interview with {{ $json.candidate_name }} ({{ $json.email }}).\n\nAI Match Score: {{ $json.match_score }}/100\nRecommendation: {{ $json.recommendation }}\nAI Summary: {{ $json.ai_summary }}\n\nAutomatically scheduled by AI Recruitment Platform.",
+        "start": "={{ $json.interview_date }}",
+        "end": "={{ $json.interview_end }}",
+        "attendees": "={{ [{ email: $json.email }] }}",
+        "conferenceData": {
+          "createRequest": {
+            "requestId": "=interview-{{ $json.candidate_id || $json.email }}",
+            "conferenceSolutionKey": { "type": "hangoutsMeet" }
+          }
+        },
+        "options": {
+          "sendUpdates": "all",
+          "conferenceDataVersion": 1
+        }
+      },
+      "id": "google-calendar",
+      "name": "Google Calendar",
+      "type": "n8n-nodes-base.googleCalendar",
+      "typeVersion": 1,
+      "position": [720, -200],
+      "notes": "Create 60-min interview event with Google Meet link. Add candidate as attendee."
+    },
+    {
+      "parameters": {
+        "resource": "message",
+        "sendTo": "={{ $json.email }}",
+        "subject": "Congratulations! Interview Invitation",
+        "emailType": "html",
+        "message": "=<html>\n<body style=\"font-family: Arial, sans-serif; max-width: 600px; margin: auto; padding: 20px;\">\n  <div style=\"background: #1a73e8; color: white; padding: 20px; border-radius: 8px 8px 0 0;\">\n    <h2 style=\"margin: 0;\">AI Recruiter</h2>\n  </div>\n  <div style=\"background: #f8f9fa; padding: 20px; border-radius: 0 0 8px 8px; border: 1px solid #dadce0;\">\n    <div style=\"background: #e6f4ea; padding: 15px; border-radius: 8px; margin-bottom: 16px;\">\n      <h3 style=\"color: #137333; margin: 0;\">🎉 Congratulations, {{ $json.candidate_name }}!</h3>\n      <p style=\"margin: 8px 0 0;\">Your application has been <strong>shortlisted</strong> with an AI Match Score of <strong>{{ $json.match_score }}/100</strong>!</p>\n    </div>\n    <p>Your interview has been scheduled. Here are the details:</p>\n    <div style=\"background: #e8f0fe; padding: 15px; border-radius: 8px; margin: 10px 0;\">\n      <table style=\"border-collapse: collapse; width: 100%;\">\n        <tr><td style=\"padding: 8px; font-weight: bold;\">Candidate:</td><td style=\"padding: 8px;\">{{ $json.candidate_name }}</td></tr>\n        <tr><td style=\"padding: 8px; font-weight: bold;\">Date:</td><td style=\"padding: 8px;\">{{ $('Set Interview Slot').item.json.date_display }}</td></tr>\n        <tr><td style=\"padding: 8px; font-weight: bold;\">Time:</td><td style=\"padding: 8px;\">{{ $('Set Interview Slot').item.json.time_display }}</td></tr>\n        <tr><td style=\"padding: 8px; font-weight: bold;\">Google Meet:</td><td style=\"padding: 8px;\"><a href=\"{{ $json.hangoutLink || $json.eventLink || '' }}\">{{ $json.hangoutLink || 'Link in Calendar invite' }}</a></td></tr>\n      </table>\n    </div>\n    <p>Click the Google Meet link above at the scheduled time to join the interview.</p>\n    <p>A Google Calendar event has also been created and sent to you. Please accept it to confirm.</p>\n    <p>We look forward to meeting you!</p>\n    <p>Best regards,<br/><strong>AI Recruiter</strong></p>\n  </div>\n</body>\n</html>"
+      },
+      "id": "gmail-send",
+      "name": "Send Gmail Invitation",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [960, -200],
+      "notes": "Send congratulations + interview invitation email via Gmail with interview details and Google Meet link"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": "{{ $env.AIRTABLE_BASE_ID || '' }}",
+        "table": "{{ $env.AIRTABLE_TABLE_NAME || 'Candidates' }}",
+        "updateKey": "Id",
+        "updateKeyMatch": "{{ $json.candidate_id || '' }}",
+        "columns": {
+          "Application Status": "Interview Scheduled",
+          "Interview Status": "Scheduled",
+          "Interview Date": "={{ $('Set Interview Slot').item.json.interview_date }}",
+          "Interview Link": "={{ $json.hangoutLink || $json.eventLink || '' }}"
+        }
+      },
+      "id": "airtable-update-scheduled",
+      "name": "Update Airtable (Scheduled)",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [1200, -200],
+      "notes": "Update candidate record: status → Interview Scheduled, add Meet link + date"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "result", "value": "success" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "success-end",
+      "name": "Success",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1440, -200],
+      "notes": "Workflow completed successfully for shortlisted candidate"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "base": "{{ $env.AIRTABLE_BASE_ID || '' }}",
+        "table": "{{ $env.AIRTABLE_TABLE_NAME || 'Candidates' }}",
+        "updateKey": "Id",
+        "updateKeyMatch": "{{ $json.candidate_id || '' }}",
+        "columns": {
+          "Application Status": "{{ $json.application_status || 'Rejected' }}"
+        }
+      },
+      "id": "airtable-update-rejected",
+      "name": "Update Airtable (Not Shortlisted)",
+      "type": "n8n-nodes-base.airtable",
+      "typeVersion": 1,
+      "position": [480, 200],
+      "notes": "Score < 80: update Airtable status (Manual Review or Rejected) and end workflow"
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            { "name": "result", "value": "processed" }
+          ]
+        },
+        "options": {}
+      },
+      "id": "end-rejected",
+      "name": "End Workflow",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [720, 200],
+      "notes": "Workflow complete for non-shortlisted candidate — no interview scheduled"
+    }
+  ],
+  "connections": {
+    "Webhook Trigger": {
+      "main": [
+        [
+          { "node": "Match Score >= 80?", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Match Score >= 80?": {
+      "main": [
+        [
+          { "node": "Set Interview Slot", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Update Airtable (Not Shortlisted)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Set Interview Slot": {
+      "main": [
+        [
+          { "node": "Google Calendar", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Google Calendar": {
+      "main": [
+        [
+          { "node": "Send Gmail Invitation", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Send Gmail Invitation": {
+      "main": [
+        [
+          { "node": "Update Airtable (Scheduled)", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Update Airtable (Scheduled)": {
+      "main": [
+        [
+          { "node": "Success", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Update Airtable (Not Shortlisted)": {
+      "main": [
+        [
+          { "node": "End Workflow", "type": "main", "index": 0 }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "timezone": "UTC"
+  },
+  "_meta": {
+    "description": "AI Resume Screening Interview Automation — n8n workflow that receives candidate JSON from FastAPI, auto-schedules Google Calendar interviews with Google Meet for shortlisted candidates (score >= 80), sends Gmail congratulations + invitation, updates Airtable. Non-shortlisted candidates get status update only.",
+    "author": "AI Recruitment Platform",
+    "version": "2.0.0",
+    "architecture": {
+      "trigger": "Webhook (POST /webhook/interview)",
+      "decision": "IF match_score >= 80",
+      "shortlistedPath": "Set Interview Slot → Google Calendar (60min + Meet) → Gmail (congratulations + invitation) → Update Airtable → Success",
+      "rejectedPath": "Update Airtable → End Workflow"
+    },
+    "setupInstructions": [
+      "1. Configure Google Calendar credentials in n8n (Settings > Credentials)",
+      "2. Configure Gmail credentials in n8n (Settings > Credentials)",
+      "3. Configure Airtable credentials in n8n (Settings > Credentials) or set AIRTABLE_BASE_ID env var",
+      "4. Set N8N_WEBHOOK_URL in FastAPI .env to http://localhost:5678/webhook/interview",
+      "5. Import this workflow into n8n (http://localhost:5678)",
+      "6. Activate the workflow",
+      "7. Upload a resume in Streamlit — FastAPI does AI analysis, then n8n handles the rest"
+    ]
+  }
+}

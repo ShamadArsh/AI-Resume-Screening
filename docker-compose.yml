@@ -1,0 +1,137 @@
+services:
+
+  # ==========================================================
+  # Redis
+  # ==========================================================
+  redis:
+    image: redis:7-alpine
+    container_name: resume_redis
+
+    ports:
+      - "6379:6379"
+
+    volumes:
+      - redis_data:/data
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # ==========================================================
+  # FastAPI Backend
+  # ==========================================================
+  backend:
+    build: .
+
+    image: ai-resume-backend
+
+    container_name: resume_backend
+
+    env_file:
+      - .env
+
+    environment:
+      - DOCKER_ENV=true
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - REDIS_URL=redis://redis:6379/0
+      - N8N_WEBHOOK_URL=http://n8n:5678/webhook/interview
+
+    ports:
+      - "8000:8000"
+
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+
+    command: >
+      uvicorn backend.api:app
+      --host 0.0.0.0
+      --port 8000
+      --reload
+
+    restart: unless-stopped
+
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+
+  # ==========================================================
+  # Streamlit Frontend
+  # ==========================================================
+  frontend:
+    build: .
+
+    image: ai-resume-frontend
+
+    container_name: resume_frontend
+
+    env_file:
+      - .env
+
+    environment:
+      - DOCKER_ENV=true
+      - API_URL=http://backend:8000
+
+    depends_on:
+      backend:
+        condition: service_healthy
+
+    ports:
+      - "8501:8501"
+
+    volumes:
+      - .:/app
+      - ./uploads:/app/uploads
+
+    command: >
+      streamlit run frontend/app.py
+      --server.address=0.0.0.0
+      --server.port=8501
+
+    restart: unless-stopped
+
+
+  # ==========================================================
+  # n8n
+  # ==========================================================
+  n8n:
+    image: n8nio/n8n:latest
+
+    container_name: resume_n8n
+
+    env_file:
+      - .env
+
+    environment:
+      - N8N_HOST=n8n
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=http
+      - WEBHOOK_URL=http://localhost:5678/
+      - N8N_BASIC_AUTH_ACTIVE=false
+
+    ports:
+      - "5678:5678"
+
+    volumes:
+      - n8n_data:/home/node/.n8n
+      - ./workflows:/app/workflows
+
+    restart: unless-stopped
+
+
+volumes:
+  redis_data:
+  n8n_data:
